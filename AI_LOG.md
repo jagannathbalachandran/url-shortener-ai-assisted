@@ -86,6 +86,6 @@ Changes requested:
 - Assertion check: every test file has assertions (repository: 13)
 - Mutation check: swallowed CodeCollisionError → 2 tests failed
   (duplicate-code, session-reuse) ✔; restored → all pass
-- CI on Postgres (3.12, 3.13): <result>
+- CI on Postgres (3.12, 3.13): PASSED
 
 Duration: 1 hour
