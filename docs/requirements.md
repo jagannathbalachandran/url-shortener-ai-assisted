@@ -44,9 +44,9 @@ malicious-URL scanning, multi-region deployment.
 ## 6. Open questions → decisions
 | # | Question | Decision |
 |---|---|---|
-| Q-1 | Same URL submitted twice: same or new code? | → ADR |
-| Q-2 | Redirect: 301 or 302? (301 is cached, hiding repeat clicks) | → ADR |
+| Q-1 | Same URL submitted twice: same or new code? | New code per create (ADR-001 D2) |
+| Q-2 | Redirect: 301 or 302? (301 is cached, hiding repeat clicks) | 302 (ADR-001 D3) |
 | Q-3 | Stats: total clicks or unique visitors? | Total clicks; unique visitors deferred (privacy) |
-| Q-4 | Code format, length, generation method? | → ADR |
-| Q-5 | Record clicks synchronously or in the background? | → ADR |
+| Q-4 | Code format, length, generation method? | Random 7-char base62 (ADR-001 D1) |
+| Q-5 | Record clicks synchronously or in the background? | Background task; queue in production (ADR-001 D4) |
 | Q-6 | Expiry behaviour (who sets it, expired-link response, default)? | Resolved in the ambiguous scenario |
