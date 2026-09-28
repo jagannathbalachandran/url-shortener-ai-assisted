@@ -1,0 +1,16 @@
+# Local, production-like Postgres for optional manual runs. Credentials
+# below are local-only placeholders, not secrets (see .env.example).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: shortener
+      POSTGRES_PASSWORD: shortener
+      POSTGRES_DB: shortener
+    ports:
+      - "5432:5432"
+    volumes:
+      - shortener-postgres-data:/var/lib/postgresql/data
+
+volumes:
+  shortener-postgres-data:

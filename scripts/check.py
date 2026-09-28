@@ -16,7 +16,16 @@ GATES: list[Gate] = [
     ("ruff format --check", [sys.executable, "-m", "ruff", "format", "--check", "."]),
     (
         "mypy --strict",
-        [sys.executable, "-m", "mypy", "--strict", "src", "tests", "scripts"],
+        [
+            sys.executable,
+            "-m",
+            "mypy",
+            "--strict",
+            "src",
+            "tests",
+            "scripts",
+            "alembic",
+        ],
     ),
     ("pytest", [sys.executable, "-m", "pytest"]),
     ("pip-audit", [sys.executable, "-m", "pip_audit"]),

@@ -59,3 +59,33 @@ Changes requested:
 Decisions: 8 assumptions accepted; 4 plan changes; 3 file-level edits; 0 rejections
 Duration: ~1h 30m (incl. ~30m one-time environment setup)
 Commit: "T-01: scaffold, quality gates, CI, conventions" (see git log)
+
+## T-02 — Database layer
+
+### Plan review
+Prompt: Implement @docs/tasks/T-02.md (plan-first via CLAUDE.md)
+Assumptions accepted: 1 sync SQLAlchemy, 2 integer PK, 5 alembic/ at root,
+7 placeholder local DB credentials, 8 no FastAPI wiring yet, 9 no mypy plugin
+Changes requested:
+ - REJECTED: AI planned to write AI_LOG.md and T-02 transcript — ownership
+   boundary; the log is my review record
+ - SQLite drops tzinfo → required tz-aware UTC round-trip on both DBs + test
+ - Session must stay usable after CodeCollisionError → required reuse test
+ - Migration test must also run on Postgres (CI); render_as_batch for SQLite
+   so future ALTER migrations (T-06/T-07) work
+
+### Review of output
+- ACCEPTED (AI-initiated): mypy coverage extended to alembic/ — consistent
+  with "all code passes mypy" convention
+- ACCEPTED: migration test restores schema in `finally`, protecting the
+  shared Postgres DB used by other tests in CI
+- AI flagged: Postgres path unverified locally (no Docker) — deferred to CI
+
+### Verification (by me)
+- check.py: all gates pass; 12 tests; coverage 96%
+- Assertion check: every test file has assertions (repository: 13)
+- Mutation check: swallowed CodeCollisionError → 2 tests failed
+  (duplicate-code, session-reuse) ✔; restored → all pass
+- CI on Postgres (3.12, 3.13): <result>
+
+Duration: 1 hour
