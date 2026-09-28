@@ -44,3 +44,25 @@ def test_get_settings_is_cached() -> None:
         assert get_settings() is get_settings()
     finally:
         get_settings.cache_clear()
+
+
+def test_base_url_trailing_slash_is_stripped(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("BASE_URL", "https://short.example/")
+
+    settings = Settings()
+
+    assert settings.base_url == "https://short.example"
+
+
+def test_base_url_without_trailing_slash_is_unchanged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("BASE_URL", "https://short.example")
+
+    settings = Settings()
+
+    assert settings.base_url == "https://short.example"

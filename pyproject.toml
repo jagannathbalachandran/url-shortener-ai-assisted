@@ -34,7 +34,13 @@ where = ["src"]
 target-version = "py311"
 
 [tool.ruff.lint]
-extend-select = ["S", "C90", "PLR0912", "PLR0913", "PLR0915"]
+extend-select = ["B", "S", "C90", "PLR0912", "PLR0913", "PLR0915"]
+
+[tool.ruff.lint.flake8-bugbear]
+# fastapi.Depends() as an argument default is the framework's documented DI
+# pattern (it's resolved per-request by FastAPI, not evaluated once at
+# import time), so B008 is a false positive here.
+extend-immutable-calls = ["fastapi.Depends"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10

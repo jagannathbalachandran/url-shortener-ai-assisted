@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_DATABASE_URL = "sqlite:///./shortener.db"
@@ -17,6 +18,12 @@ class Settings(BaseSettings):
 
     database_url: str = DEFAULT_DATABASE_URL
     base_url: str = DEFAULT_BASE_URL
+
+    @field_validator("base_url")
+    @classmethod
+    def _strip_trailing_slash(cls, value: str) -> str:
+        """Strip trailing slashes so short links never get a double slash."""
+        return value.rstrip("/")
 
 
 @lru_cache

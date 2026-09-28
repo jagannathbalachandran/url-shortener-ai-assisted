@@ -27,6 +27,16 @@ python scripts/check.py
 --check, mypy --strict, pytest (with coverage), and pip-audit — stopping at
 the first failure.
 
+## Running the service
+
+```bash
+uvicorn shortener.main:app --reload
+```
+
+Interactive API docs (Swagger UI) are then at http://localhost:8000/docs
+(OpenAPI schema at http://localhost:8000/openapi.json). Drop `--reload` outside
+of local development.
+
 ## Database
 
 Configuration is via environment variables (see `.env.example`):

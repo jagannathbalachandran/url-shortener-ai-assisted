@@ -89,3 +89,41 @@ Changes requested:
 - CI on Postgres (3.12, 3.13): PASSED
 
 Duration: 1 hour
+
+## T-03 — Create short link
+
+### Plan review
+Prompt: Implement @docs/tasks/T-03.md (plan-first via CLAUDE.md)
+Plan: codegen, validation, service (with LinkWriter protocol), schemas,
+dependencies, routes, app factory; unit + integration tests
+Assumptions accepted: 1 no new deps, 2 plain {"detail"} errors (custom format
+is T-05), 4 AI won't touch AI_LOG/transcripts, 5 exact route path
+Changes requested:
+ - BASE_URL trailing slash would produce "//" in short URLs → strip on load + test
+ - Commit point not stated → required it documented; test must prove the link
+   is committed before the response (AC2)
+ - validate_url: accept uppercase schemes; reject whitespace/control chars
+   rather than trimming (preserves "store exactly what was submitted")
+ - Promoted log boundary into CLAUDE.md as a standing rule (AI respected it
+   unprompted; made it explicit so it doesn't depend on session context)
+
+### Review of output
+- ACCEPTED: whitespace check runs on raw input before parsing — urlsplit silently
+  strips some control chars, so a post-parse check would have cleaned bad input
+  instead of rejecting it. Real library pitfall surfaced by the review point.
+- ACCEPTED: commit test uses a separate DB connection, proving a real commit
+  rather than same-session visibility
+- ACCEPTED: settings stored on app.state so tests use a consistent BASE_URL
+- CHALLENGED: B008 exemption looked like dead config (B not in extend-select).
+  AI verified empirically: removed the block, B008 still fired — ruff 0.16.9
+  enables B008 by default. Exemption was valid.
+- DECIDED: made "B" (bugbear) explicit in extend-select so gates don't depend on
+  ruff's implicit defaults across versions; no new findings
+
+### Verification (by me)
+- check.py: all gates pass; 56 tests; coverage 97%
+- Manual API check via Swagger: 201 + 7-char code, correct short_url; same URL
+  twice → different codes; javascript:/ftp:/no host/space/empty → 422;
+  HTTPS:// accepted; BASE_URL trailing slash → no "//" <✔/✘ per item>
+- CI (3.12, 3.13, Postgres): <result>
+- Manual API check via Swagger: pending

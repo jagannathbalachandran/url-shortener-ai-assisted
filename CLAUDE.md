@@ -14,6 +14,7 @@
   a rule globally — use a targeted `# noqa` (or equivalent) with a justification comment.
 - CI changes must use least-privilege permissions, pin actions to a specific major
   version (e.g. `actions/checkout@v4`), and set `timeout-minutes` on every job.
+- Never create or edit AI_LOG.md or docs/transcripts/ — the engineer writes those.
 
 ## Code design
 
