@@ -1,15 +1,22 @@
-"""Business logic for creating short links."""
+"""Business logic for creating and resolving short links."""
 
 from __future__ import annotations
 
+import re
 from typing import Protocol
 
-from shortener.codegen import CodeGenerator
-from shortener.exceptions import CodeCollisionError, LinkCreationExhaustedError
-from shortener.models import Link
+from shortener.codegen import BASE62_ALPHABET, CodeGenerator
+from shortener.exceptions import (
+    CodeCollisionError,
+    LinkCreationExhaustedError,
+    LinkNotFoundError,
+)
+from shortener.models import CODE_LENGTH, Link
 from shortener.validation import validate_url
 
 MAX_CODE_GENERATION_ATTEMPTS = 5  # ADR-001 D1
+
+_CODE_FORMAT_PATTERN = re.compile(f"^[{BASE62_ALPHABET}]{{{CODE_LENGTH}}}$")
 
 
 class LinkWriter(Protocol):
@@ -20,12 +27,28 @@ class LinkWriter(Protocol):
         ...
 
 
-class LinkService:
-    """Validates, generates a code for, and persists new links."""
+class LinkReader(Protocol):
+    """Minimal lookup interface LinkService needs from a repository."""
 
-    def __init__(self, repository: LinkWriter, code_generator: CodeGenerator) -> None:
+    def get_by_code(self, code: str) -> Link | None:
+        """Return the link stored under `code`, or None if it doesn't exist."""
+        ...
+
+
+def _is_valid_code_format(code: str) -> bool:
+    """True if `code` is a well-formed short code (fixed-length base62)."""
+    return _CODE_FORMAT_PATTERN.fullmatch(code) is not None
+
+
+class LinkService:
+    """Validates and persists new links, and resolves codes back to links."""
+
+    def __init__(
+        self, repository: LinkWriter, code_generator: CodeGenerator, reader: LinkReader
+    ) -> None:
         self._repository = repository
         self._code_generator = code_generator
+        self._reader = reader
 
     def create_link(self, url: str) -> Link:
         """Validate `url`, generate a code, and persist the link."""
@@ -38,3 +61,13 @@ class LinkService:
             except CodeCollisionError:
                 continue
         raise LinkCreationExhaustedError(MAX_CODE_GENERATION_ATTEMPTS)
+
+    def resolve(self, code: str) -> Link:
+        """Return the link for `code`; raise LinkNotFoundError if unknown or malformed."""
+        # Malformed codes never reach the repository (FR-3 / no DB query for junk input).
+        if not _is_valid_code_format(code):
+            raise LinkNotFoundError(code)
+        link = self._reader.get_by_code(code)
+        if link is None:
+            raise LinkNotFoundError(code)
+        return link

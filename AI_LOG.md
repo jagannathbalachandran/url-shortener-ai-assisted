@@ -203,3 +203,43 @@ was that bugbear rules weren't enabled, so the block was dead config.
   tools exactly", using installed versions only. The old ranges were loose
   (e.g. ruff>=0.6.0 while 0.16.9 was actually installed), so CI and a local
   machine could already run different rule sets and checker versions.
+
+Tool: Claude Code (plan + implementation); Claude chat (independent review of
+Claude Code's plan)
+
+### Verdict: EDITED
+Review process: I passed Claude Code's plans to Claude chat for a second
+review, read its findings, and sent the corrections I agreed with back to
+Claude Code. The analysis below credits whichever tool raised each point.
+
+Accepted (Claude Code's proposals, kept as is):
+- Not using Starlette's RedirectResponse, since it re-quotes URLs; the
+  Location header is set directly.
+- Route-shadowing analysis: /{code} matches single-segment paths only;
+  registered last anyway, and tested by AC6.
+- Format check in the service with unconstrained path parameters, so
+  malformed codes return 404, not 422.
+- Checking validation.py before proposing: CR/LF already rejected at creation;
+  non-ASCII accepted in path and host.
+- Latin-1 header analysis (non-ASCII above U+00FF → 500) and the quote()
+  fix that percent-encodes only non-ASCII characters.
+- Complete test-to-acceptance-criteria mapping.
+
+Edited (raised by Claude chat's review; I agreed and directed the change):
+- Café test: Claude Code expected byte-exact passthrough, contradicting its
+  own quote() proposal (é becomes caf%C3%A9). Both non-ASCII tests now assert
+  ASCII-only Location, UTF-8 percent-encoding, unquote(Location) == stored
+  URL, and 302 (never 500).
+- Brief updated with the non-ASCII Location exception, so the brief matches
+  the implementation.
+
+Rejected:
+- Protocol rename LinkWriter → LinkStore (Claude Code's first plan): an
+  unnecessary change to T-03 code. Replaced by a separate LinkReader protocol,
+  as suggested in Claude chat's review.
+- Optional reader plus a RuntimeError guard (Claude Code's second plan): it
+  moved a wiring error from mypy (construction time) to runtime, and added a
+  path that existed only for coverage. Claude chat pointed out this was a
+  side effect of its own earlier suggestion not to touch the T-03 test
+  doubles. Changed to a required parameter; the existing tests pass a minimal
+  fake reader.

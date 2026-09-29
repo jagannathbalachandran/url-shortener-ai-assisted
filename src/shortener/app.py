@@ -8,7 +8,12 @@ from starlette import status
 
 from shortener.config import Settings, get_settings
 from shortener.db import create_session_factory
-from shortener.exceptions import InvalidUrlError, LinkCreationExhaustedError
+from shortener.exceptions import (
+    InvalidUrlError,
+    LinkCreationExhaustedError,
+    LinkNotFoundError,
+)
+from shortener.redirects import router as redirects_router
 from shortener.routes import router
 
 
@@ -21,6 +26,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(router)
     app.add_exception_handler(InvalidUrlError, _handle_invalid_url)
     app.add_exception_handler(LinkCreationExhaustedError, _handle_creation_exhausted)
+    app.add_exception_handler(LinkNotFoundError, _handle_link_not_found)
+    # Registered last: a root-level catch-all must never shadow /docs, /openapi.json
+    # or /api/v1/... routes (T-04).
+    app.include_router(redirects_router)
     return app
 
 
@@ -35,4 +44,11 @@ def _handle_creation_exhausted(request: Request, exc: Exception) -> JSONResponse
     """Map LinkCreationExhaustedError to a 503 response."""
     return JSONResponse(
         status_code=status.HTTP_503_SERVICE_UNAVAILABLE, content={"detail": str(exc)}
+    )
+
+
+def _handle_link_not_found(request: Request, exc: Exception) -> JSONResponse:
+    """Map LinkNotFoundError to a 404 response."""
+    return JSONResponse(
+        status_code=status.HTTP_404_NOT_FOUND, content={"detail": str(exc)}
     )

@@ -38,4 +38,5 @@ def get_link_service(
     code_generator: CodeGenerator = Depends(get_code_generator),
 ) -> LinkService:
     """Build a LinkService wired to a per-request repository and code generator."""
-    return LinkService(LinkRepository(session), code_generator)
+    repository = LinkRepository(session)
+    return LinkService(repository, code_generator, reader=repository)

@@ -1,8 +1,10 @@
-"""API routes for link creation."""
+"""API routes for link creation and lookup."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Path, status
 
 from shortener.config import Settings
 from shortener.dependencies import get_current_settings, get_link_service
@@ -20,4 +22,15 @@ def create_link(
 ) -> LinkResponse:
     """Create a short link for `body.url` and return its short URL."""
     link = service.create_link(body.url)
+    return LinkResponse.from_link(link, settings.base_url)
+
+
+@router.get("/{code}", response_model=LinkResponse)
+def get_link_details(
+    code: Annotated[str, Path()],
+    service: Annotated[LinkService, Depends(get_link_service)],
+    settings: Annotated[Settings, Depends(get_current_settings)],
+) -> LinkResponse:
+    """Return details for the link stored under `code`."""
+    link = service.resolve(code)
     return LinkResponse.from_link(link, settings.base_url)

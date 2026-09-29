@@ -29,3 +29,16 @@ class LinkCreationExhaustedError(ShortenerError):
     def __init__(self, attempts: int) -> None:
         super().__init__(f"Failed to generate a unique code after {attempts} attempts")
         self.attempts = attempts
+
+
+class LinkNotFoundError(ShortenerError):
+    """Raised when a code doesn't resolve to a link, whether malformed or unknown.
+
+    Both cases share one exception and message so a client can't distinguish
+    "unknown code" from "malformed code" (no information leak about which
+    codes exist or what shape they have).
+    """
+
+    def __init__(self, code: str) -> None:
+        super().__init__(f"No link found for code: {code}")
+        self.code = code
