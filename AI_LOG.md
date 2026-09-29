@@ -127,3 +127,79 @@ Changes requested:
   HTTPS:// accepted; BASE_URL trailing slash → no "//" <✔/✘ per item>
 - CI (3.12, 3.13, Postgres): <result>
 - Manual API check via Swagger: pending
+
+## T-03 follow-up / #<n> — Lint config: bugbear selection and gate-tool pins — 2026-09-29 <HH:MM>
+
+Tool: Claude Code (terminal, manual approval mode)
+Related: T-03 (Depends() in route handlers), CLAUDE.md quality gates, scripts/check.py
+Transcript: <transcripts-folder>/T-03-followup-lint-config.md
+
+### Why this came up
+While reviewing pyproject.toml after T-03, I noticed a
+[tool.ruff.lint.flake8-bugbear] block (extend-immutable-calls =
+["fastapi.Depends"]) even though "B" was not in extend-select. My hypothesis
+was that bugbear rules weren't enabled, so the block was dead config.
+
+### Prompt summary
+1. Check whether the bugbear block has any effect, before changing anything.
+2. Make bugbear selection explicit.
+3. Pin the quality-gate dev dependencies to exactly the versions installed in
+   the venv (read via `pip show`, not chosen by the AI); don't touch runtime
+   dependencies; check whether CI installs any tool separately; show the
+   version list and diff before applying.
+
+### What the AI did
+- Ran an experiment before editing: removed the bugbear block with "B" still
+  absent from extend-select, then re-ran ruff check.
+- Result: B008 (function-call-in-default-argument) still fired, 4 errors on
+  the Depends() default arguments, the same ones as originally.
+- Explanation: ruff 0.16.9's default rule set already includes B008
+  (`ruff check --isolated --show-settings` lists 413 rules enabled with no
+  config), so the exemption was doing real work.
+- Restored the block, added "B" to extend-select, and ran scripts/check.py:
+  no new B findings (exception re-raises already use `raise ... from exc`).
+- Listed the installed versions of the five gate tools check.py relies on:
+  ruff check, ruff format --check, mypy --strict, pytest, pip-audit, plus
+  pytest-cov via pytest's --cov addopt.
+- Checked .github/workflows/ci.yml: CI installs via `pip install -e ".[dev]"`
+  with no separate tool installs, so pyproject.toml is the only place to pin.
+- Proposed the pin diff (applied after my review):
+
+  | Tool       | Before    | After    |
+  |------------|-----------|----------|
+  | ruff       | >=0.6.0   | ==0.16.9 |
+  | mypy       | >=1.11.0  | ==2.3.1  |
+  | pytest     | >=8.3.0   | ==9.1.1  |
+  | pytest-cov | >=5.0.0   | ==7.1.0  |
+  | pip-audit  | >=2.7.0   | ==2.10.1 |
+  | httpx      | >=0.27.0  | unchanged (test client, not a gate) |
+
+### Verification (done by me, independently)
+- `ruff check --isolated --show-settings | Select-String "B008"` lists
+  function-call-in-default-argument (B008) with config ignored, so it is a
+  default rule in ruff 0.16.9. The AI's explanation is confirmed.
+- Pins verified via `pip install -e ".[dev]" --dry-run`: all five tools
+  "already satisfied" at the pinned versions; only the project itself would
+  reinstall (normal for an editable install).
+- `git diff pyproject.toml`: changes confined to the dev dependency list; no
+  runtime dependency lines touched.
+- B008 probe (throwaway file, deleted afterwards): a datetime.now() default
+  was flagged; a Depends() default was not. The rule is active and the
+  exemption is scoped to Depends only.
+- scripts/check.py passes locally; CI green; CI log shows ruff 0.16.9
+  installed.
+
+### Verdict: EDITED
+- Rejected (my hypothesis, disproved by experiment): "the bugbear block is
+  dead config." It was actively suppressing B008 on FastAPI Depends().
+  Removing it would have broken the lint gate.
+- Accepted: add "B" to extend-select explicitly and keep the Depends
+  exemption. The lint gate should not depend on ruff's implicit defaults,
+  which can change between versions.
+- Accepted: the AI scoped the pins to exactly the five gate tools check.py
+  uses, left httpx as a range because it isn't a gate, and confirmed CI
+  installs via .[dev] before proposing changes, so no workflow edit was needed.
+- Edited (my direction): widened the change from "select B" to "pin all gate
+  tools exactly", using installed versions only. The old ranges were loose
+  (e.g. ruff>=0.6.0 while 0.16.9 was actually installed), so CI and a local
+  machine could already run different rule sets and checker versions.
