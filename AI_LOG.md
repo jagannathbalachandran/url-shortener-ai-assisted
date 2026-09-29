@@ -243,3 +243,170 @@ Rejected:
   side effect of its own earlier suggestion not to touch the T-03 test
   doubles. Changed to a required parameter; the existing tests pass a minimal
   fake reader.
+## T-04 — Redirect, link details, 404 for unknown codes — 2026-09-29 <HH:MM>
+
+Tool: Claude Code (plan + implementation); Claude chat (independent review of
+Claude Code's plan)
+Brief: docs/tasks/T-04.md
+Implements: FR-2 (redirect), FR-3 (404 for unknown codes), FR-4 (link details);
+ADR-001 D3 (302)
+Transcript: <transcripts-folder>/T-04-redirect-details.md
+
+### Prompt summary
+1. Plan only (files, route registration, format-check location,
+   test-to-criteria mapping, assumptions).
+2. Review round: check what T-03 validation accepts for non-ASCII and CR/LF;
+   keep LinkWriter unchanged and add a separate LinkReader protocol.
+3. Approve with two changes (below); implement; run scripts/check.py.
+
+### What the AI produced
+- exceptions.py: LinkNotFoundError, same for malformed and unknown codes
+- service.py: LinkReader protocol; LinkService.resolve(); format check built
+  from existing constants, run before any repository call
+- routes.py: GET /api/v1/links/{code}, reusing LinkResponse
+- redirects.py (new): GET /{code} → 302, Location, Cache-Control: no-store;
+  registered last
+- app.py, dependencies.py: 404 handler; repository wired as writer and reader
+- Tests: 63 → 80
+
+### Verdict: EDITED
+Review process: I passed Claude Code's plans to Claude chat for a second
+review, read its findings, and sent the corrections I agreed with back to
+Claude Code. Each point below credits the tool that raised it.
+
+Accepted (Claude Code's proposals, kept as is):
+- Not using Starlette's RedirectResponse, since it re-quotes URLs; the
+  Location header is set directly.
+- Route-shadowing analysis: /{code} matches single-segment paths only;
+  registered last anyway, and tested by AC6.
+- Format check in the service with unconstrained path parameters, so
+  malformed codes return 404, not 422.
+- Checking validation.py before proposing: CR/LF already rejected at
+  creation; non-ASCII accepted in path and host.
+- Latin-1 header analysis (non-ASCII above U+00FF → 500) and the quote()
+  fix that percent-encodes only non-ASCII characters.
+- Complete test-to-acceptance-criteria mapping.
+
+Edited (raised by Claude chat's review; I agreed and directed the change):
+- Café test: Claude Code expected byte-exact passthrough, contradicting its
+  own quote() proposal (é becomes caf%C3%A9). Both non-ASCII tests now assert
+  ASCII-only Location, UTF-8 percent-encoding, unquote(Location) ==
+
+
+## T-05 / #<n> — Hardening: health/ready, JSON errors, rate limiting, latency — 2026-09-29 <HH:MM>
+
+Tool: Claude Code (plan + implementation); Claude chat (independent review of
+Claude Code's plan and reports)
+Brief: docs/tasks/T-05.md
+Implements: Reliability (health/readiness, consistent JSON errors), Security
+(rate limiting on creation), Performance (redirect p95 < 50 ms), Privacy
+(no raw IPs stored or logged); plan T-05.1–T-05.4
+Transcript: <transcripts-folder>/T-05-hardening.md
+
+### Prompt summary
+1. Plan only, covering: files, route registration order, error mapping
+   (including Starlette 404/405), limiter design, /ready DB check, latency
+   test in CI, existing tests to change, test-to-criteria mapping.
+2. Approve with six changes (below); implement; run gates.
+3. Asked for file-and-line confirmation of each approved change; fix the
+   gaps found.
+
+### What the AI produced
+- errors.py (new): one error shape {"error": {"code", "message", "details"?}};
+  handlers for validation (422), invalid URL (422), Starlette HTTP errors
+  (404/405/other), unknown code (404), code-space exhaustion (503), rate
+  limit (429 + Retry-After), readiness (503), unhandled (500, traceback
+  logged, never returned)
+- rate_limit.py (new): fixed-window, per-IP, in-memory limiter; injectable
+  clock; thread lock; throttled eviction
+- health.py (new): /health (no dependencies, so no DB access), /ready
+  (DB ping via the repository layer)
+- config.py: rate-limit settings (default 10 per 60 s); .env.example documents them
+- dependencies.py, repository.py, routes.py, app.py: wiring; health router
+  registered before the /{code} redirect router
+- Tests: 80 → 109
+
+### Review process
+Claude chat reviewed Claude Code's plan and its reports; I read the
+findings and sent the ones I agreed with back to Claude Code. Each point
+below credits the tool that raised it.
+
+### Verdict: EDITED
+
+Accepted (Claude Code's own work):
+- Rate limiter as a dependency on the create route, not middleware, so
+  other routes are structurally unaffected.
+- Starlette's HTTPException handled, not just FastAPI's, so unknown-route
+  404s and 405s use the standard shape.
+- Validation details keep field location and message only; pydantic's
+  "input" is dropped, so submitted values are never echoed.
+- Generic messages for not-found and exhaustion errors: no longer echoes
+  the submitted code or the internal attempt count.
+- Dependency overrides for the /ready failure and the 500 test (fast,
+  deterministic), following the existing override pattern.
+- Latency test kept at the strict 50 ms p95; Claude Code flagged the CI
+  flakiness risk instead of quietly loosening the threshold.
+- Only two existing tests changed (the two asserting the old {"detail"}
+  shape), both listed in the plan.
+- Found and fixed a hidden defect: Alembic's fileConfig() defaulted to
+  disable_existing_loggers=True, silently switching off the app's logger
+  whenever migrations ran in-process first (every test session). This
+  would have made error logging, and the AC4 test, unreliable. Fixed with
+  disable_existing_loggers=False. Outside the brief's file list, accepted
+  as justified.
+- Replaced the deprecated HTTP_422_UNPROCESSABLE_ENTITY constant, including
+  in existing T-03 code (outside scope, accepted): pytest warnings 14 → 6.
+
+Edited (raised by Claude chat's review; I agreed and directed the change):
+1. Annotated style: Claude Code proposed the old `= Depends(...)` style for
+   the new rate-limit parameter, contradicting the brief. Changed to
+   dependencies=[Depends(...)] on the route decorator: no new parameter,
+   no mixed styles.
+2. Test isolation: asked Claude Code to check whether a shared app fixture
+   would make existing create tests hit the limit. Result: all fixtures are
+   function-scoped, and no existing test makes more than 2 POSTs, so no
+   change was needed.
+3. 405 handling: pass exc.headers through so 405 keeps its required Allow
+   header (tested); map other HTTP statuses to a generic http_error code
+   rather than assuming only 404/405 (tested with a synthetic 418).
+4. Eviction: sweep stale buckets at most once per window instead of on
+   every call, while still resetting the requesting key's own expired
+   bucket directly.
+5. Unhandled-exception log: method and path only (request.url.path, so no
+   query string), never the client IP or request body; tested with caplog.
+6. No deprecated 422 constant in new code.
+
+Rejected:
+- Reading Starlette's source from the global Python install: Claude Code
+  asked for a machine-wide permission to read outside the project. I
+  declined, since the global copy may differ from the venv's Starlette
+  (1.7.0) that the app actually runs, and redirected it to the venv copy.
+
+### Instruction-following gap (main finding)
+Claude Code's report after implementation said the six approved changes
+were done, but it covered only points 1–3. When asked for file-and-line
+confirmation of points 4–6:
+- Point 4 (eviction throttling) had not been implemented; eviction still
+  ran on every call.
+- Point 5 (log method and path) did not match; the log line had neither.
+Both were then fixed and tested. Lesson: verify each approved change
+individually against the code, rather than accepting a summary report.
+
+### Results reported by Claude Code (local, SQLite)
+- scripts/check.py: ruff ✔, ruff format ✔, mypy --strict ✔,
+  pytest 109/109 ✔, coverage 98.58% (errors.py 100%), pip-audit ✔
+- Latency (20 warm-up + 300 samples): p50 4.8 ms, p95 8.0 ms, max 43.2 ms
+- Pytest warnings: 6, all pre-existing (1 httpx/TestClient, 4 alembic
+  path_separator, 1 unclosed SQLite connection in a test)
+- Postgres not verified locally (Docker not running); covered by CI
+
+### Known limitations / follow-ups
+- Rate limiting is per client IP, in memory, per instance, fixed window
+  (bursts possible at window edges). Behind a load balancer, trusted-proxy
+  configuration is needed; in production, limits would be per API key at
+  the gateway with a shared store (e.g. Redis).
+- The latency test runs in-process, so it measures app code, not network
+  latency. CI on Postgres is the first real check against the 50 ms bound.
+- 6 remaining pytest warnings, tracked for the pre-baseline chore commit.
+- Manual verification (curl checks) to be done and recorded separately.
+

@@ -9,6 +9,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_DATABASE_URL = "sqlite:///./shortener.db"
 DEFAULT_BASE_URL = "http://localhost:8000"
+DEFAULT_RATE_LIMIT_MAX_REQUESTS = 10
+DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 60.0
 
 
 class Settings(BaseSettings):
@@ -18,6 +20,8 @@ class Settings(BaseSettings):
 
     database_url: str = DEFAULT_DATABASE_URL
     base_url: str = DEFAULT_BASE_URL
+    rate_limit_max_requests: int = DEFAULT_RATE_LIMIT_MAX_REQUESTS
+    rate_limit_window_seconds: float = DEFAULT_RATE_LIMIT_WINDOW_SECONDS
 
     @field_validator("base_url")
     @classmethod

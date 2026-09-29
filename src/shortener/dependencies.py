@@ -5,12 +5,17 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 from fastapi import Depends, Request
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from shortener.codegen import CodeGenerator, SecureCodeGenerator
 from shortener.config import Settings
-from shortener.repository import LinkRepository
+from shortener.exceptions import DatabaseUnavailableError, RateLimitExceededError
+from shortener.rate_limit import RateLimiter
+from shortener.repository import LinkRepository, ping_database
 from shortener.service import LinkService
+
+UNKNOWN_CLIENT_KEY = "unknown"
 
 
 def get_current_settings(request: Request) -> Settings:
@@ -40,3 +45,27 @@ def get_link_service(
     """Build a LinkService wired to a per-request repository and code generator."""
     repository = LinkRepository(session)
     return LinkService(repository, code_generator, reader=repository)
+
+
+def get_rate_limiter(request: Request) -> RateLimiter:
+    """Return the app-wide RateLimiter instance."""
+    limiter: RateLimiter = request.app.state.rate_limiter
+    return limiter
+
+
+def enforce_create_rate_limit(
+    request: Request, limiter: RateLimiter = Depends(get_rate_limiter)
+) -> None:
+    """Raise RateLimitExceededError if the requesting client is over its limit."""
+    key = request.client.host if request.client else UNKNOWN_CLIENT_KEY
+    result = limiter.allow(key)
+    if not result.allowed:
+        raise RateLimitExceededError(result.retry_after_seconds)
+
+
+def get_database_health(session: Session = Depends(get_session)) -> None:
+    """Raise DatabaseUnavailableError if a trivial query against the DB fails."""
+    try:
+        ping_database(session)
+    except SQLAlchemyError as exc:
+        raise DatabaseUnavailableError() from exc

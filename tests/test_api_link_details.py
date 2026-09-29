@@ -72,7 +72,9 @@ def test_unknown_code_returns_404(client: TestClient, db_session: Session) -> No
     response = client.get("/api/v1/links/ZZZZZZZ")
 
     assert response.status_code == 404
-    assert "detail" in response.json()
+    body = response.json()
+    assert body["error"]["code"] == "not_found"
+    assert "message" in body["error"]
 
 
 @pytest.mark.parametrize("code", MALFORMED_CODES)

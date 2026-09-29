@@ -42,3 +42,18 @@ class LinkNotFoundError(ShortenerError):
     def __init__(self, code: str) -> None:
         super().__init__(f"No link found for code: {code}")
         self.code = code
+
+
+class DatabaseUnavailableError(ShortenerError):
+    """Raised when a readiness check finds the database unreachable."""
+
+    def __init__(self) -> None:
+        super().__init__("Database is unavailable")
+
+
+class RateLimitExceededError(ShortenerError):
+    """Raised when a client exceeds the request rate limit for an endpoint."""
+
+    def __init__(self, retry_after_seconds: float) -> None:
+        super().__init__("Rate limit exceeded")
+        self.retry_after_seconds = retry_after_seconds

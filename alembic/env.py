@@ -13,7 +13,11 @@ from shortener.models import Link  # noqa: F401  # registers Link on Base.metada
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False: fileConfig's default silently disables
+    # every logger already created in this process (e.g. the app's own,
+    # when migrations run in-process as in the test suite) that isn't
+    # listed in alembic.ini's [loggers] section.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 if not config.get_main_option("sqlalchemy.url"):
     config.set_main_option("sqlalchemy.url", get_settings().database_url)

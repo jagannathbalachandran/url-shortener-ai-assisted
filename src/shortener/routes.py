@@ -7,14 +7,23 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Path, status
 
 from shortener.config import Settings
-from shortener.dependencies import get_current_settings, get_link_service
+from shortener.dependencies import (
+    enforce_create_rate_limit,
+    get_current_settings,
+    get_link_service,
+)
 from shortener.schemas import CreateLinkRequest, LinkResponse
 from shortener.service import LinkService
 
 router = APIRouter(prefix="/api/v1/links", tags=["links"])
 
 
-@router.post("", response_model=LinkResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=LinkResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(enforce_create_rate_limit)],
+)
 def create_link(
     body: CreateLinkRequest,
     service: LinkService = Depends(get_link_service),

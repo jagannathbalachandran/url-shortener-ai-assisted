@@ -9,6 +9,13 @@ from sqlalchemy.orm import Session
 from shortener.exceptions import CodeCollisionError
 from shortener.models import Link
 
+_READINESS_PROBE = select(1)
+
+
+def ping_database(session: Session) -> None:
+    """Execute a trivial query to confirm the database connection is alive."""
+    session.execute(_READINESS_PROBE)
+
 
 class LinkRepository:
     """Persists and retrieves Link records via an injected session."""
