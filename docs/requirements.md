@@ -49,4 +49,4 @@ malicious-URL scanning, multi-region deployment.
 | Q-3 | Stats: total clicks or unique visitors? | Total clicks; unique visitors deferred (privacy) |
 | Q-4 | Code format, length, generation method? | Random 7-char base62 (ADR-001 D1) |
 | Q-5 | Record clicks synchronously or in the background? | Background task; queue in production (ADR-001 D4) |
-| Q-6 | Expiry behaviour (who sets it, expired-link response, default)? | Resolved in the ambiguous scenario |
+| Q-6 | Expiry behaviour (who sets it, expired-link response, default)? | Optional `expires_at` set by creator; default never; expired → 410 Gone; stats still available (ADR-002) |
