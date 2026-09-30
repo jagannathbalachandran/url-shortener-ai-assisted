@@ -12,6 +12,8 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -e ".[dev]"
 python scripts/check.py
+alembic upgrade head
+uvicorn shortener.main:app --reload
 ```
 
 ### Linux / macOS (bash)
@@ -21,17 +23,18 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 python scripts/check.py
+alembic upgrade head
+uvicorn shortener.main:app --reload
 ```
 
 `scripts/check.py` runs all quality gates in order — ruff check, ruff format
 --check, mypy --strict, pytest (with coverage), and pip-audit — stopping at
 the first failure.
 
-## Running the service
-
-```bash
-uvicorn shortener.main:app --reload
-```
+Schema is managed entirely through Alembic migrations (no `create_all` in
+application code), so `alembic upgrade head` must be run before starting the
+service — a fresh database (the default SQLite file included) has no tables
+until migrations are applied.
 
 Interactive API docs (Swagger UI) are then at http://localhost:8000/docs
 (OpenAPI schema at http://localhost:8000/openapi.json). Drop `--reload` outside
@@ -46,11 +49,9 @@ Configuration is via environment variables (see `.env.example`):
   no code change: `postgresql+psycopg://shortener:shortener@localhost:5432/shortener`.
 - `BASE_URL` — public short-link base, defaults to `http://localhost:8000`.
 
-Schema is managed entirely through Alembic migrations (no `create_all` in
-application code):
+Other Alembic commands:
 
 ```bash
-alembic upgrade head      # apply all migrations
 alembic downgrade base    # revert all migrations
 alembic revision -m "..."  # add a new migration
 ```
