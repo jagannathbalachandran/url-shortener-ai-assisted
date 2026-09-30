@@ -27,7 +27,7 @@ Changes requested:
 ### File-level review
 - pyproject.toml — EDITED: S101 (assert) would fail every pytest test;
   added per-file ignore for tests/ only, keeping S rules active on app code
-- ci.yml — EDITED: added pip upgrade step (pip-audit flags outdated runner pip) (confirm)
+- ci.yml — EDITED: added pip upgrade step (pip-audit flags outdated runner pip)
 - CLAUDE.md — EDITED:
   - plan-first rule lacked "wait for go-ahead", so it wasn't a real checkpoint; added
   - added Code design section (my standard): single responsibility, size targets
@@ -38,7 +38,7 @@ Changes requested:
   targeted `# noqa: S603` with justification on subprocess call
 - test_smoke.py, __init__.py — ACCEPTED
 - README.md — EDITED: added PowerShell execution-policy note after hitting it
-  during my own verification (confirm)
+  during my own verification
 
 ### AI self-corrections (observed, accepted)
 - Removed a stale `# noqa: S404`: rule not in installed ruff, flagged as unused (RUF100)
@@ -54,7 +54,7 @@ Changes requested:
   later gates skipped; removed → all passed ✔
 - Fail-closed: running without venv active → failed at first gate
   ("No module named ruff") rather than skipping ✔
-- CI on GitHub (3.12, 3.13): <result after push>
+- CI on GitHub (3.12, 3.13): Pass
 
 
 ### Summary
@@ -127,14 +127,14 @@ Changes requested:
 - Manual API check via Swagger: 201 + 7-char code, correct short_url; same URL
   twice → different codes; javascript:/ftp:/no host/space/empty → 422;
   HTTPS:// accepted; BASE_URL trailing slash → no "//" <✔/✘ per item>
-- CI (3.12, 3.13, Postgres): <result>
-- Manual API check via Swagger: pending
+- CI (3.12, 3.13, Postgres): PASS
+- Manual API check via Swagger: PASS
 
-## T-03 follow-up / #<n> — Lint config: bugbear selection and gate-tool pins — 2026-09-29
+## T-03 follow-up — Lint config: bugbear selection and gate-tool pins — 2026-09-29
 
 Tool: Claude Code (terminal, manual approval mode)
 Related: T-03 (Depends() in route handlers), CLAUDE.md quality gates, scripts/check.py
-Transcript: <transcripts-folder>/T-03-followup-lint-config.md
+Transcript: docs/transcripts/T-03-followup-lint-config.md
 
 ### Why this came up
 While reviewing pyproject.toml after T-03, I noticed a
@@ -245,14 +245,14 @@ Rejected:
   side effect of its own earlier suggestion not to touch the T-03 test
   doubles. Changed to a required parameter; the existing tests pass a minimal
   fake reader.
-## T-04 — Redirect, link details, 404 for unknown codes — 2026-09-29 <HH:MM>
+## T-04 — Redirect, link details, 404 for unknown codes — 2026-09-29
 
 Tool: Claude Code (plan + implementation); Claude chat (independent review of
 Claude Code's plan)
 Brief: docs/tasks/T-04.md
 Implements: FR-2 (redirect), FR-3 (404 for unknown codes), FR-4 (link details);
 ADR-001 D3 (302)
-Transcript: <transcripts-folder>/T-04-redirect-details.md
+Transcript: docs/transcripts/T-04-redirect-details.md
 
 ### Prompt summary
 1. Plan only (files, route registration, format-check location,
@@ -295,7 +295,7 @@ Edited (raised by Claude chat's review; I agreed and directed the change):
   ASCII-only Location, UTF-8 percent-encoding, unquote(Location) ==
 
 
-## T-05 / #<n> — Hardening: health/ready, JSON errors, rate limiting, latency — 2026-09-29 <HH:MM>
+## T-05 — Hardening: health/ready, JSON errors, rate limiting, latency — 2026-09-29
 
 Tool: Claude Code (plan + implementation); Claude chat (independent review of
 Claude Code's plan and reports)
@@ -303,7 +303,7 @@ Brief: docs/tasks/T-05.md
 Implements: Reliability (health/readiness, consistent JSON errors), Security
 (rate limiting on creation), Performance (redirect p95 < 50 ms), Privacy
 (no raw IPs stored or logged); plan T-05.1–T-05.4
-Transcript: <transcripts-folder>/T-05-hardening.md
+Transcript: docs/transcripts/T-05-hardening.md
 
 ### Prompt summary
 1. Plan only, covering: files, route registration order, error mapping
@@ -412,11 +412,11 @@ individually against the code, rather than accepting a summary report.
 - 6 remaining pytest warnings, tracked for the pre-baseline chore commit.
 - Manual verification (curl checks) to be done and recorded separately.
 
-## T-05b — Pre-baseline cleanup — 2026-09-30 <HH:MM>
+## T-05b — Pre-baseline cleanup — 2026-09-30
 
 Tool: Claude Code (plan + implementation); Claude chat (plan review)
 Brief: docs/tasks/T-05b.md
-Transcript: <transcripts-folder>/T-05b-pre-baseline.md
+Transcript: docs/transcripts/T-05b-pre-baseline.md
 
 ### What the AI produced
 - tests/test_models.py, tests/test_main.py (new): models.py and main.py at 100%
@@ -497,11 +497,11 @@ created on the baseline code are unaffected and still redirect. Acceptable
 for a prototype with no production data; a production fix would include a
 data check or cleanup migration.
 
-## T-06 Phase B — Click analytics and stats — 2026-09-30 <HH:MM>
+## T-06 Phase B — Click analytics and stats — 2026-09-30
 
 Tool: Claude Code (plan + implementation, auto mode); Claude chat (plan review)
 Brief: docs/tasks/T-06.md (Phase B)
-Transcript: <transcripts-folder>/T-06-phase-b.md
+Transcript: docs/transcripts/T-06-phase-b.md
 
 ### What the AI produced
 - Click model and migration 0002 (link_id FK, clicked_at UTC, referrer_host);
@@ -571,12 +571,12 @@ Deviation made by Claude Code without asking (accepted after review):
   "(direct)" is over-counted.
 - Clicks can be lost on a crash (ADR-001 D4; production path is a queue).
 
-## T-07 — Link expiry (ambiguous scenario) — 2026-09-30 <HH:MM>
+## T-07 — Link expiry (ambiguous scenario) — 2026-09-30
 
 Tool: Claude Code (plan + implementation, auto mode); Claude chat
 (options and recommendations for ADR-002, plan review)
 Brief: docs/tasks/T-07.md; decisions: docs/adr/0002-link-expiry.md
-Transcript: <transcripts-folder>/T-07-expiry.md
+Transcript: docs/transcripts/T-07-expiry.md
 
 ### How the ambiguity was handled
 1. Claude chat listed the open questions behind FR-7 "links can expire"
