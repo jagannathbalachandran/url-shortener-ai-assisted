@@ -3,6 +3,13 @@
 Runs against whatever database the `database_url` fixture resolves to --
 SQLite locally, Postgres in CI -- via the same fixtures the other
 integration tests use, so no CI-specific handling is needed here.
+
+T-06's click write is a background task the redirect response never waits
+for in production, but FastAPI's TestClient runs background tasks inline,
+so timing the client call as-is would measure that DB write too. The
+`get_session_factory` dependency is overridden with a no-op session double
+so this test measures the redirect handler alone; click recording itself
+is covered separately in test_redirect_click_recording.py.
 """
 
 from __future__ import annotations
@@ -11,16 +18,18 @@ import math
 import time
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from shortener.app import create_app
 from shortener.config import Settings
 from shortener.db import create_session_factory
+from shortener.dependencies import get_session_factory
 from shortener.models import Link
 from shortener.repository import LinkRepository
 
@@ -32,12 +41,47 @@ SAMPLE_REQUESTS = 300
 P95_THRESHOLD_MS = 50.0
 
 
+class _NoOpClickSession:
+    """A Session double that discards every write.
+
+    Gives ClickRepository.add() (session.add/commit/refresh) somewhere to
+    write to without it touching the real database, so the background
+    click-recording task costs no DB round trip.
+    """
+
+    def add(self, instance: object) -> None:
+        pass
+
+    def commit(self) -> None:
+        pass
+
+    def refresh(self, instance: object) -> None:
+        pass
+
+    def close(self) -> None:
+        pass
+
+
+def _noop_session_factory() -> sessionmaker[Session]:
+    """Override for get_session_factory: every call yields a no-op session."""
+
+    def _make_noop_session() -> Session:
+        return cast("Session", _NoOpClickSession())
+
+    return cast("sessionmaker[Session]", _make_noop_session)
+
+
 @pytest.fixture
 def app(database_url: str) -> Iterator[FastAPI]:
-    """A real app wired to the migrated test database (no dependency overrides)."""
+    """A real app wired to the migrated test database.
+
+    get_session_factory is overridden so the background click write is a
+    no-op (see module docstring) -- every other dependency is real.
+    """
     application = create_app(
         Settings(database_url=database_url, base_url=TEST_BASE_URL)
     )
+    application.dependency_overrides[get_session_factory] = _noop_session_factory
     yield application
     application.state.session_factory.kw["bind"].dispose()
 
