@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import Depends, Request
@@ -40,13 +41,19 @@ def get_code_generator() -> CodeGenerator:
     return SecureCodeGenerator()
 
 
+def get_clock() -> Callable[[], datetime]:
+    """Return the real UTC clock; overridable in tests for expiry boundaries."""
+    return lambda: datetime.now(UTC)
+
+
 def get_link_service(
     session: Annotated[Session, Depends(get_session)],
     code_generator: Annotated[CodeGenerator, Depends(get_code_generator)],
+    clock: Annotated[Callable[[], datetime], Depends(get_clock)],
 ) -> LinkService:
-    """Build a LinkService wired to a per-request repository and code generator."""
+    """Build a LinkService wired to a per-request repository, code generator, and clock."""
     repository = LinkRepository(session)
-    return LinkService(repository, code_generator, reader=repository)
+    return LinkService(repository, code_generator, reader=repository, clock=clock)
 
 
 def get_rate_limiter(request: Request) -> RateLimiter:

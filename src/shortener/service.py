@@ -16,11 +16,12 @@ from shortener.codegen import BASE62_ALPHABET, CodeGenerator
 from shortener.exceptions import (
     CodeCollisionError,
     LinkCreationExhaustedError,
+    LinkExpiredError,
     LinkNotFoundError,
 )
 from shortener.models import CODE_LENGTH, Click, Link
 from shortener.repository import ClickRepository
-from shortener.validation import validate_url
+from shortener.validation import validate_expiry, validate_url
 
 MAX_CODE_GENERATION_ATTEMPTS = 5  # ADR-001 D1
 CLICKS_PER_DAY_WINDOW_DAYS = 30
@@ -56,17 +57,27 @@ class LinkService:
     """Validates and persists new links, and resolves codes back to links."""
 
     def __init__(
-        self, repository: LinkWriter, code_generator: CodeGenerator, reader: LinkReader
+        self,
+        repository: LinkWriter,
+        code_generator: CodeGenerator,
+        reader: LinkReader,
+        clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._repository = repository
         self._code_generator = code_generator
         self._reader = reader
+        self._clock = clock
 
-    def create_link(self, url: str) -> Link:
-        """Validate `url`, generate a code, and persist the link."""
+    def create_link(self, url: str, expires_at: str | None = None) -> Link:
+        """Validate `url` and `expires_at`, generate a code, and persist the link."""
         original_url = validate_url(url)
+        expiry = validate_expiry(expires_at, self._clock())
         for _ in range(MAX_CODE_GENERATION_ATTEMPTS):
-            link = Link(code=self._code_generator.generate(), original_url=original_url)
+            link = Link(
+                code=self._code_generator.generate(),
+                original_url=original_url,
+                expires_at=expiry,
+            )
             try:
                 # LinkRepository.add() commits before returning (T-02).
                 return self._repository.add(link)
@@ -82,6 +93,17 @@ class LinkService:
         link = self._reader.get_by_code(code)
         if link is None:
             raise LinkNotFoundError(code)
+        return link
+
+    def resolve_for_redirect(self, code: str) -> Link:
+        """Return the link for `code`, as resolve() does, but raise
+        LinkExpiredError if it has passed its expires_at (ADR-002 D3: now >=
+        expires_at). Kept separate from resolve() so details/stats stay
+        available for expired links (ADR-002 D4).
+        """
+        link = self.resolve(code)
+        if link.expires_at is not None and self._clock() >= link.expires_at:
+            raise LinkExpiredError(code)
         return link
 
 
@@ -156,6 +178,7 @@ class LinkStats:
     total_clicks: int
     clicks_per_day: list[DailyClickCount]
     top_referrers: list[ReferrerCount]
+    expires_at: datetime | None
 
 
 def _clicks_per_day_window_start(now: datetime) -> datetime:
@@ -192,4 +215,5 @@ class StatsService:
             total_clicks=self._click_reader.total_clicks(link.id),
             clicks_per_day=[DailyClickCount(day=d, count=c) for d, c in per_day],
             top_referrers=[ReferrerCount(referrer=r, count=c) for r, c in top],
+            expires_at=link.expires_at,
         )

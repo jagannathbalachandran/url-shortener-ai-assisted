@@ -42,7 +42,7 @@ def redirect_to_original(
     Records the click in the background, after the response is sent
     (ADR-001 D4) -- never on the hot path of the redirect itself.
     """
-    link = service.resolve(code)
+    link = service.resolve_for_redirect(code)
     location = quote(link.original_url, safe=_LOCATION_SAFE_CHARS, encoding="utf-8")
     background_tasks.add_task(
         record_click_in_background, session_factory, link.id, referrer_host

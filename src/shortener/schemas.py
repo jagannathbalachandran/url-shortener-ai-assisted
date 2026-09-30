@@ -9,11 +9,22 @@ from pydantic import BaseModel, Field
 from shortener.models import Link
 from shortener.service import LinkStats
 
+EXPIRES_AT_EXAMPLE = "2026-12-31T23:59:59+00:00"
+
 
 class CreateLinkRequest(BaseModel):
     """Request body for POST /api/v1/links."""
 
     url: str
+    expires_at: str | None = Field(
+        default=None,
+        description=(
+            "Optional expiry, as an ISO 8601 datetime with a time zone. "
+            "Must be strictly in the future; omit for a link that never "
+            "expires."
+        ),
+        json_schema_extra={"format": "date-time", "example": EXPIRES_AT_EXAMPLE},
+    )
 
 
 class LinkResponse(BaseModel):
@@ -23,6 +34,9 @@ class LinkResponse(BaseModel):
     short_url: str
     original_url: str
     created_at: datetime
+    expires_at: datetime | None = Field(
+        default=None, description="When this link expires; null if it never does."
+    )
 
     @classmethod
     def from_link(cls, link: Link, base_url: str) -> LinkResponse:
@@ -32,6 +46,7 @@ class LinkResponse(BaseModel):
             short_url=f"{base_url}/{link.code}",
             original_url=link.original_url,
             created_at=link.created_at,
+            expires_at=link.expires_at,
         )
 
 
@@ -68,6 +83,13 @@ class LinkStatsResponse(BaseModel):
         ...,
         description="All-time top 5 referrer hosts by click count, descending.",
     )
+    expires_at: datetime | None = Field(
+        default=None,
+        description=(
+            "When this link expires; null if it never does. Shown even "
+            "after the link has expired."
+        ),
+    )
 
     @classmethod
     def from_stats(cls, code: str, stats: LinkStats) -> LinkStatsResponse:
@@ -83,4 +105,5 @@ class LinkStatsResponse(BaseModel):
                 ReferrerCountEntry(referrer=r.referrer, count=r.count)
                 for r in stats.top_referrers
             ],
+            expires_at=stats.expires_at,
         )

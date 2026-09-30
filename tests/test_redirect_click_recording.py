@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from shortener.app import create_app
 from shortener.config import Settings
 from shortener.db import create_session_factory
-from shortener.dependencies import get_session_factory
+from shortener.dependencies import get_clock, get_session_factory
 from shortener.models import Click, Link
 from shortener.redirects import redirect_to_original
 from shortener.repository import LinkRepository
@@ -26,6 +26,7 @@ from shortener.service import LinkService, record_click_in_background
 
 TEST_BASE_URL = "http://short.test"
 VALID_URL = "https://example.com/article"
+FIXED_NOW = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 
 
 class _NoCodesGenerator:
@@ -92,9 +93,19 @@ def db_session(database_url: str) -> Iterator[Session]:
     factory.kw["bind"].dispose()
 
 
-def _seed_link(db_session: Session, code: str, original_url: str = VALID_URL) -> Link:
+def _seed_link(
+    db_session: Session,
+    code: str,
+    original_url: str = VALID_URL,
+    expires_at: datetime | None = None,
+) -> Link:
     return LinkRepository(db_session).add(
-        Link(code=code, original_url=original_url, created_at=datetime.now(UTC))
+        Link(
+            code=code,
+            original_url=original_url,
+            created_at=datetime.now(UTC),
+            expires_at=expires_at,
+        )
     )
 
 
@@ -125,6 +136,18 @@ def test_unknown_code_records_no_click(client: TestClient, db_session: Session) 
 
     assert response.status_code == 404
     assert db_session.execute(select(func.count()).select_from(Click)).scalar_one() == 0
+
+
+def test_expired_link_records_no_click(
+    app: FastAPI, client: TestClient, db_session: Session
+) -> None:
+    link = _seed_link(db_session, "GGGGGGG", expires_at=FIXED_NOW)
+    app.dependency_overrides[get_clock] = lambda: lambda: FIXED_NOW
+
+    response = client.get("/GGGGGGG")
+
+    assert response.status_code == 410
+    assert _click_count(db_session, link.id) == 0
 
 
 def test_malformed_code_records_no_click(

@@ -1,11 +1,12 @@
-"""URL validation for link creation."""
+"""URL and expiry validation for link creation."""
 
 from __future__ import annotations
 
 import unicodedata
+from datetime import UTC, datetime
 from urllib.parse import urlsplit
 
-from shortener.exceptions import InvalidUrlError
+from shortener.exceptions import InvalidExpiryError, InvalidUrlError
 from shortener.models import MAX_ORIGINAL_URL_LENGTH
 
 ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
@@ -31,3 +32,24 @@ def validate_url(url: str) -> str:
 def _has_disallowed_chars(url: str) -> bool:
     """True if `url` contains whitespace or a control character."""
     return any(ch.isspace() or unicodedata.category(ch) == "Cc" for ch in url)
+
+
+def validate_expiry(raw_expires_at: str | None, now: datetime) -> datetime | None:
+    """Return `raw_expires_at` parsed to a UTC datetime, or None if absent.
+
+    Rejects (as InvalidExpiryError) a value that fails to parse as ISO 8601,
+    has no time zone, or is not strictly in the future relative to `now`
+    (ADR-002 D1/D3): in the past or equal to now are both invalid.
+    """
+    if raw_expires_at is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw_expires_at)
+    except ValueError as exc:
+        raise InvalidExpiryError(raw_expires_at) from exc
+    if parsed.tzinfo is None:
+        raise InvalidExpiryError(raw_expires_at)
+    parsed_utc = parsed.astimezone(UTC)
+    if parsed_utc <= now:
+        raise InvalidExpiryError(raw_expires_at)
+    return parsed_utc

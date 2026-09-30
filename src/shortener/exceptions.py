@@ -23,6 +23,26 @@ class InvalidUrlError(ShortenerError):
         self.url = url
 
 
+class InvalidExpiryError(ShortenerError):
+    """Raised when a submitted expires_at fails validation.
+
+    Covers every failure mode alike (malformed, missing time zone, in the
+    past, or equal to now) so a client can't distinguish which one occurred.
+    """
+
+    def __init__(self, expires_at: str) -> None:
+        super().__init__("Invalid expires_at")
+        self.expires_at = expires_at
+
+
+class LinkExpiredError(ShortenerError):
+    """Raised when a redirect is requested for a link past its expires_at."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(f"Link has expired: {code}")
+        self.code = code
+
+
 class LinkCreationExhaustedError(ShortenerError):
     """Raised when every code-generation attempt collides with an existing code."""
 

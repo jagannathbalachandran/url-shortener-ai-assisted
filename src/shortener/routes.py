@@ -31,7 +31,7 @@ def create_link(
     settings: Annotated[Settings, Depends(get_current_settings)],
 ) -> LinkResponse:
     """Create a short link for `body.url` and return its short URL."""
-    link = service.create_link(body.url)
+    link = service.create_link(body.url, body.expires_at)
     return LinkResponse.from_link(link, settings.base_url)
 
 

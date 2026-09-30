@@ -14,12 +14,13 @@ from sqlalchemy.orm import Session
 from shortener.app import create_app
 from shortener.config import Settings
 from shortener.db import create_session_factory
-from shortener.dependencies import get_code_generator
+from shortener.dependencies import get_clock, get_code_generator
 from shortener.models import CODE_LENGTH, MAX_ORIGINAL_URL_LENGTH, Link
 from shortener.repository import LinkRepository
 
 TEST_BASE_URL = "http://short.test"
 VALID_URL = "https://example.com/article"
+FIXED_NOW = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 
 INVALID_URLS = [
     "javascript:alert(1)",
@@ -30,6 +31,12 @@ INVALID_URLS = [
     "",
     "not a url",
     "https://example.com/" + "a" * MAX_ORIGINAL_URL_LENGTH,
+]
+
+INVALID_EXPIRIES = [
+    "2020-01-01T00:00:00+00:00",  # in the past
+    "2026-06-01T00:00:00",  # no time zone
+    "not a date",
 ]
 
 
@@ -149,3 +156,47 @@ def test_retry_exhaustion_returns_503(
     response = client.post("/api/v1/links", json={"url": VALID_URL})
 
     assert response.status_code == 503
+
+
+def test_create_link_without_expiry_returns_null_expires_at(client: TestClient) -> None:
+    response = client.post("/api/v1/links", json={"url": VALID_URL})
+
+    assert response.json()["expires_at"] is None
+
+
+def test_create_link_with_future_expiry_returns_it_normalized_to_utc(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/v1/links",
+        json={"url": VALID_URL, "expires_at": "2026-12-31T23:59:59+02:00"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["expires_at"] == "2026-12-31T21:59:59Z"
+
+
+@pytest.mark.parametrize("expires_at", INVALID_EXPIRIES)
+def test_create_link_rejects_invalid_expiry_with_422(
+    client: TestClient, expires_at: str
+) -> None:
+    response = client.post(
+        "/api/v1/links", json={"url": VALID_URL, "expires_at": expires_at}
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_expiry"
+
+
+def test_create_link_rejects_expiry_equal_to_now_with_422(
+    app: FastAPI, client: TestClient
+) -> None:
+    app.dependency_overrides[get_clock] = lambda: lambda: FIXED_NOW
+
+    response = client.post(
+        "/api/v1/links",
+        json={"url": VALID_URL, "expires_at": FIXED_NOW.isoformat()},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_expiry"

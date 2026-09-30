@@ -571,3 +571,56 @@ Deviation made by Claude Code without asking (accepted after review):
   "(direct)" is over-counted.
 - Clicks can be lost on a crash (ADR-001 D4; production path is a queue).
 
+## T-07 — Link expiry (ambiguous scenario) — 2026-09-30 <HH:MM>
+
+Tool: Claude Code (plan + implementation, auto mode); Claude chat
+(options and recommendations for ADR-002, plan review)
+Brief: docs/tasks/T-07.md; decisions: docs/adr/0002-link-expiry.md
+Transcript: <transcripts-folder>/T-07-expiry.md
+
+### How the ambiguity was handled
+1. Claude chat listed the open questions behind FR-7 "links can expire"
+   (who sets it, format, default, expired response, clicks, stats after
+   expiry, boundary, cleanup, editing) with options and a recommendation
+   for each.
+2. I decided all nine and recorded them in ADR-002, with requirements.md
+   Q-6 updated, before any code was written.
+3. Claude Code planned against the real code; the review then found one
+   gap (below).
+
+### What the AI produced
+- Migration 0003: nullable expires_at on links (batch_alter_table); existing
+  links NULL, never expire
+- validate_expiry: time zone required, must be in the future, normalized
+  to UTC; failures → 422 invalid_expiry
+- LinkService: injectable clock; resolve_for_redirect raises
+  LinkExpiredError when now >= expires_at; resolve() stays expiry-blind so
+  details and stats keep working
+- Redirect on an expired link → 410 link_expired with no-store; no click
+  scheduled (the raise happens before add_task)
+- expires_at in create, details and stats responses
+- Tests 160 → 193; coverage 100%
+
+### Verdict: EDITED
+Accepted (Claude Code's proposals):
+- A separate resolve_for_redirect, keeping resolve() single-purpose
+- expires_at taken as a raw string and validated in the service, because
+  the future check needs the injected clock
+- Explicit batch_alter_table in the migration itself
+- Whole-second boundary tests, avoiding SQLite/Postgres precision
+  differences
+- Checked for exact-body assertions: none affected by the new field
+
+Edited (raised in Claude chat's review; I agreed and directed):
+1. Stats response lacked expires_at, contrary to AC5; added and tested.
+2. expires_at documented in the OpenAPI schema (description, date-time
+   format, example), so /docs shows clients what to send.
+
+### Verification (by me)
+- scripts/check.py: 193/193, 100% coverage
+- git diff baseline-greenfield -- tests/: existing test files only gained
+  new test functions; no existing assertion changed
+- CI green on Postgres
+
+### Results reported by Claude Code
+- Latency p95 12.4 ms (T-06: 11.5 ms)

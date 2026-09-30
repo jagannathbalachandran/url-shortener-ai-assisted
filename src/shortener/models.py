@@ -57,6 +57,7 @@ class Link(Base):
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime, default=lambda: datetime.now(UTC)
     )
+    expires_at: Mapped[datetime | None] = mapped_column(UTCDateTime, default=None)
 
 
 class Click(Base):

@@ -51,9 +51,19 @@ def db_session(database_url: str) -> Iterator[Session]:
     factory.kw["bind"].dispose()
 
 
-def _seed_link(db_session: Session, code: str, original_url: str = VALID_URL) -> None:
-    LinkRepository(db_session).add(
-        Link(code=code, original_url=original_url, created_at=datetime.now(UTC))
+def _seed_link(
+    db_session: Session,
+    code: str,
+    original_url: str = VALID_URL,
+    expires_at: datetime | None = None,
+) -> Link:
+    return LinkRepository(db_session).add(
+        Link(
+            code=code,
+            original_url=original_url,
+            created_at=datetime.now(UTC),
+            expires_at=expires_at,
+        )
     )
 
 
@@ -66,6 +76,18 @@ def test_known_code_returns_details_matching_the_create_response(
 
     assert response.status_code == 200
     assert response.json() == created
+
+
+def test_details_for_an_expired_link_returns_200_with_expires_at(
+    client: TestClient, db_session: Session
+) -> None:
+    past_expiry = datetime(2020, 1, 1, tzinfo=UTC)
+    _seed_link(db_session, "EXPIRED", expires_at=past_expiry)
+
+    response = client.get("/api/v1/links/EXPIRED")
+
+    assert response.status_code == 200
+    assert response.json()["expires_at"] == "2020-01-01T00:00:00Z"
 
 
 def test_unknown_code_returns_404(client: TestClient, db_session: Session) -> None:

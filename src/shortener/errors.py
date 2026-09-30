@@ -19,15 +19,19 @@ from starlette.exceptions import HTTPException
 
 from shortener.exceptions import (
     DatabaseUnavailableError,
+    InvalidExpiryError,
     InvalidUrlError,
     LinkCreationExhaustedError,
+    LinkExpiredError,
     LinkNotFoundError,
     RateLimitExceededError,
 )
 
 ERROR_VALIDATION = "validation_error"
 ERROR_INVALID_URL = "invalid_url"
+ERROR_INVALID_EXPIRY = "invalid_expiry"
 ERROR_NOT_FOUND = "not_found"
+ERROR_LINK_EXPIRED = "link_expired"
 ERROR_METHOD_NOT_ALLOWED = "method_not_allowed"
 ERROR_HTTP_GENERIC = "http_error"
 ERROR_CODE_SPACE_EXHAUSTED = "code_space_exhausted"
@@ -39,10 +43,17 @@ _GENERIC_INTERNAL_MESSAGE = "An unexpected error occurred."
 _NOT_READY_MESSAGE = "Service is not ready."
 _CODE_SPACE_EXHAUSTED_MESSAGE = "Unable to generate a unique code, please try again."
 _LINK_NOT_FOUND_MESSAGE = "No link found for the given code."
+_LINK_EXPIRED_MESSAGE = "This link has expired."
 _RATE_LIMITED_MESSAGE = "Rate limit exceeded."
 _VALIDATION_FAILED_MESSAGE = "Request validation failed."
 _INVALID_URL_MESSAGE = "Invalid URL."
+_INVALID_EXPIRY_MESSAGE = (
+    "Invalid expires_at: must be an ISO 8601 datetime with a time zone, "
+    "strictly in the future."
+)
 _RETRY_AFTER_HEADER = "Retry-After"
+_CACHE_CONTROL_HEADER = "Cache-Control"
+_NO_STORE = "no-store"
 
 _logger = logging.getLogger(__name__)
 
@@ -91,6 +102,25 @@ def _handle_link_not_found_error(request: Request, exc: Exception) -> JSONRespon
     """Map LinkNotFoundError to a 404 response."""
     return error_response(
         status.HTTP_404_NOT_FOUND, ERROR_NOT_FOUND, _LINK_NOT_FOUND_MESSAGE
+    )
+
+
+def _handle_link_expired_error(request: Request, exc: Exception) -> JSONResponse:
+    """Map LinkExpiredError to a 410 response that is never cached (ADR-002 D3)."""
+    return error_response(
+        status.HTTP_410_GONE,
+        ERROR_LINK_EXPIRED,
+        _LINK_EXPIRED_MESSAGE,
+        headers={_CACHE_CONTROL_HEADER: _NO_STORE},
+    )
+
+
+def _handle_invalid_expiry_error(request: Request, exc: Exception) -> JSONResponse:
+    """Map InvalidExpiryError to a 422 response."""
+    return error_response(
+        status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ERROR_INVALID_EXPIRY,
+        _INVALID_EXPIRY_MESSAGE,
     )
 
 
@@ -173,7 +203,9 @@ def _handle_unhandled_exception(request: Request, exc: Exception) -> JSONRespons
 def register_exception_handlers(app: FastAPI) -> None:
     """Wire every domain and framework exception to its standard-shape handler."""
     app.add_exception_handler(InvalidUrlError, _handle_invalid_url_error)
+    app.add_exception_handler(InvalidExpiryError, _handle_invalid_expiry_error)
     app.add_exception_handler(LinkNotFoundError, _handle_link_not_found_error)
+    app.add_exception_handler(LinkExpiredError, _handle_link_expired_error)
     app.add_exception_handler(
         LinkCreationExhaustedError, _handle_link_creation_exhausted_error
     )

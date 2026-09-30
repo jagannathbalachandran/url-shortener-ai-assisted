@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from shortener.exceptions import (
     CodeCollisionError,
+    InvalidExpiryError,
     InvalidUrlError,
     LinkCreationExhaustedError,
+    LinkExpiredError,
     LinkNotFoundError,
 )
 from shortener.models import Link
@@ -15,6 +19,7 @@ from shortener.service import MAX_CODE_GENERATION_ATTEMPTS, LinkService
 
 VALID_URL = "https://example.com"
 VALID_CODE = "AAAAAAA"
+NOW = datetime(2026, 1, 1, tzinfo=UTC)
 
 
 class FakeCodeGenerator:
@@ -150,3 +155,92 @@ def test_resolve_passes_the_code_through_unchanged_for_case_sensitivity() -> Non
         service.resolve("aaaaaaa")
 
     assert reader.calls == 1
+
+
+def test_create_link_without_expiry_leaves_expires_at_none() -> None:
+    writer = FakeLinkWriter()
+    service = LinkService(
+        writer, FakeCodeGenerator([VALID_CODE]), FakeLinkReader(), clock=lambda: NOW
+    )
+
+    link = service.create_link(VALID_URL)
+
+    assert link.expires_at is None
+
+
+def test_create_link_with_future_expiry_stores_it_normalized_to_utc() -> None:
+    writer = FakeLinkWriter()
+    service = LinkService(
+        writer, FakeCodeGenerator([VALID_CODE]), FakeLinkReader(), clock=lambda: NOW
+    )
+
+    link = service.create_link(VALID_URL, "2026-06-01T12:00:00+02:00")
+
+    assert link.expires_at == datetime(2026, 6, 1, 10, 0, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    "expires_at",
+    [
+        "2025-01-01T00:00:00+00:00",  # in the past
+        NOW.isoformat(),  # equal to now
+        "2026-06-01T00:00:00",  # no time zone
+        "not a date",
+    ],
+)
+def test_create_link_rejects_invalid_expiry_without_touching_the_writer(
+    expires_at: str,
+) -> None:
+    writer = FakeLinkWriter()
+    service = LinkService(
+        writer, FakeCodeGenerator([]), FakeLinkReader(), clock=lambda: NOW
+    )
+
+    with pytest.raises(InvalidExpiryError):
+        service.create_link(VALID_URL, expires_at)
+
+    assert writer.calls == 0
+
+
+def test_resolve_for_redirect_returns_a_non_expiring_link() -> None:
+    link = Link(code=VALID_CODE, original_url=VALID_URL, expires_at=None)
+    reader = SpyLinkReader(link)
+    service = LinkService(FakeLinkWriter(), FakeCodeGenerator([]), reader)
+
+    assert service.resolve_for_redirect(VALID_CODE) is link
+
+
+def test_resolve_for_redirect_returns_a_link_not_yet_expired() -> None:
+    link = Link(
+        code=VALID_CODE, original_url=VALID_URL, expires_at=NOW + timedelta(seconds=1)
+    )
+    reader = SpyLinkReader(link)
+    service = LinkService(
+        FakeLinkWriter(), FakeCodeGenerator([]), reader, clock=lambda: NOW
+    )
+
+    assert service.resolve_for_redirect(VALID_CODE) is link
+
+
+def test_resolve_for_redirect_raises_at_the_exact_expiry_instant() -> None:
+    link = Link(code=VALID_CODE, original_url=VALID_URL, expires_at=NOW)
+    reader = SpyLinkReader(link)
+    service = LinkService(
+        FakeLinkWriter(), FakeCodeGenerator([]), reader, clock=lambda: NOW
+    )
+
+    with pytest.raises(LinkExpiredError):
+        service.resolve_for_redirect(VALID_CODE)
+
+
+def test_resolve_for_redirect_raises_after_expiry() -> None:
+    link = Link(
+        code=VALID_CODE, original_url=VALID_URL, expires_at=NOW - timedelta(seconds=1)
+    )
+    reader = SpyLinkReader(link)
+    service = LinkService(
+        FakeLinkWriter(), FakeCodeGenerator([]), reader, clock=lambda: NOW
+    )
+
+    with pytest.raises(LinkExpiredError):
+        service.resolve_for_redirect(VALID_CODE)

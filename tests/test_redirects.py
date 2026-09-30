@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from urllib.parse import unquote
 
 import pytest
@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from shortener.app import create_app
 from shortener.config import Settings
 from shortener.db import create_session_factory
+from shortener.dependencies import get_clock
 from shortener.models import Link
 from shortener.repository import LinkRepository
 
@@ -22,6 +23,7 @@ TEST_BASE_URL = "http://short.test"
 VALID_URL = "https://example.com/article"
 
 MALFORMED_CODES = ["AAAAAA", "AAAAAAAA", "AAAAA-A"]
+FIXED_NOW = datetime(2026, 6, 1, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -52,9 +54,19 @@ def db_session(database_url: str) -> Iterator[Session]:
     factory.kw["bind"].dispose()
 
 
-def _seed_link(db_session: Session, code: str, original_url: str = VALID_URL) -> None:
+def _seed_link(
+    db_session: Session,
+    code: str,
+    original_url: str = VALID_URL,
+    expires_at: datetime | None = None,
+) -> None:
     LinkRepository(db_session).add(
-        Link(code=code, original_url=original_url, created_at=datetime.now(UTC))
+        Link(
+            code=code,
+            original_url=original_url,
+            created_at=datetime.now(UTC),
+            expires_at=expires_at,
+        )
     )
 
 
@@ -145,3 +157,40 @@ def test_round_trip_with_non_latin1_path_is_percent_encoded_not_500(
     location = response.headers["location"]
     assert location.isascii()
     assert unquote(location) == url
+
+
+def test_redirect_just_before_expiry_still_returns_302(
+    app: FastAPI, client: TestClient, db_session: Session
+) -> None:
+    _seed_link(db_session, "AAAAAAA", expires_at=FIXED_NOW + timedelta(seconds=1))
+    app.dependency_overrides[get_clock] = lambda: lambda: FIXED_NOW
+
+    response = client.get("/AAAAAAA")
+
+    assert response.status_code == 302
+
+
+def test_redirect_at_the_exact_expiry_instant_returns_410(
+    app: FastAPI, client: TestClient, db_session: Session
+) -> None:
+    _seed_link(db_session, "AAAAAAA", expires_at=FIXED_NOW)
+    app.dependency_overrides[get_clock] = lambda: lambda: FIXED_NOW
+
+    response = client.get("/AAAAAAA")
+
+    assert response.status_code == 410
+    assert response.headers["cache-control"] == "no-store"
+    body = response.json()
+    assert body["error"]["code"] == "link_expired"
+    assert "message" in body["error"]
+
+
+def test_redirect_after_expiry_returns_410(
+    app: FastAPI, client: TestClient, db_session: Session
+) -> None:
+    _seed_link(db_session, "AAAAAAA", expires_at=FIXED_NOW - timedelta(seconds=1))
+    app.dependency_overrides[get_clock] = lambda: lambda: FIXED_NOW
+
+    response = client.get("/AAAAAAA")
+
+    assert response.status_code == 410
