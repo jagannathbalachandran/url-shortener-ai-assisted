@@ -23,7 +23,7 @@ def validate_url(url: str) -> str:
         parsed = urlsplit(url)
     except ValueError as exc:
         raise InvalidUrlError(url) from exc
-    if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES or not parsed.netloc:
+    if parsed.scheme.lower() not in ALLOWED_URL_SCHEMES or not parsed.hostname:
         raise InvalidUrlError(url)
     return url
 

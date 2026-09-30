@@ -38,6 +38,25 @@ DISALLOWED_CHAR_URLS = [
     "http://example.com/\x00path",
 ]
 
+# netloc is non-empty for all of these (a port and/or userinfo only), but
+# urlsplit's `hostname` is None -- there is no real host (T-03 AC3: "missing
+# host" must be rejected with 422; docs/plan.md T-03: "well-formed URL with a
+# real host").
+HOSTLESS_URLS = [
+    "https://user@/path",
+    "http://:8080",
+    "https://@",
+    "http://user:pass@",
+]
+
+# Netloc shapes that look unusual but do carry a real, parseable host and
+# must still be accepted.
+VALID_URLS_WITH_UNUSUAL_NETLOC = [
+    "https://example.com:8080",
+    "http://[::1]/",
+    "https://user@example.com",
+]
+
 
 @pytest.mark.parametrize("url", VALID_URLS)
 def test_accepts_valid_http_and_https_urls(url: str) -> None:
@@ -81,4 +100,15 @@ def test_rejects_url_over_max_length() -> None:
 def test_does_not_rewrite_the_submitted_url() -> None:
     url = "https://example.com/path?q=1"
 
+    assert validate_url(url) == url
+
+
+@pytest.mark.parametrize("url", HOSTLESS_URLS)
+def test_rejects_urls_with_netloc_but_no_real_host(url: str) -> None:
+    with pytest.raises(InvalidUrlError):
+        validate_url(url)
+
+
+@pytest.mark.parametrize("url", VALID_URLS_WITH_UNUSUAL_NETLOC)
+def test_accepts_urls_with_a_real_host_despite_unusual_netloc(url: str) -> None:
     assert validate_url(url) == url

@@ -128,7 +128,7 @@ Changes requested:
 - CI (3.12, 3.13, Postgres): <result>
 - Manual API check via Swagger: pending
 
-## T-03 follow-up / #<n> — Lint config: bugbear selection and gate-tool pins — 2026-09-29 <HH:MM>
+## T-03 follow-up / #<n> — Lint config: bugbear selection and gate-tool pins — 2026-09-29
 
 Tool: Claude Code (terminal, manual approval mode)
 Related: T-03 (Depends() in route handlers), CLAUDE.md quality gates, scripts/check.py
@@ -453,4 +453,45 @@ Corrected:
 - CI green, no Node deprecation annotation
 - Clean-clone test: fresh clone into a temp folder, followed README only;
   setup, migrations, server start and check.py all worked first time.
+
+## T-06 Phase A — Defect: host-less URLs accepted — 2026-09-30 
+
+Tool: Claude Code (defect hunt, with a subagent cross-check; test-first fix);
+Claude chat (review)
+Brief: docs/tasks/T-06.md (Phase A)
+
+### Defect
+validate_url checked parsed.netloc (user@host:port) instead of
+parsed.hostname, so URLs with userinfo or port but no host
+(e.g. https://user@/path, http://:8080) were accepted and stored, and would
+redirect to nowhere. Contradicts T-03's acceptance criterion
+"missing host → 422". T-03's test covered only the obvious case (https://).
+
+### How it was found and chosen
+- Claude Code reviewed the baseline code and reported one candidate with
+  citation, reproduction and impact; an independent subagent review
+  reached the same defect and found no others it could verify. One
+  candidate rather than three was accepted, as preferable to padding.
+- I chose to fix it. The test cases and the red/green evidence requirement
+  were set by me, with Claude chat's review.
+
+### Test-first
+- Red: 7 new test cases in tests/test_validation.py (4 host-less URLs that
+  must be rejected; 3 valid forms that must stay accepted: port, IPv6,
+  userinfo with host). The 4 host-less cases failed against baseline code.
+- Fix: validation.py:26, `not parsed.netloc` → `not parsed.hostname`.
+  One line, nothing else changed.
+- Green: 28/28 validation tests; full suite 122/122; check.py all gates.
+
+### Verification (by me)
+- git diff src/: one line changed
+- Red reproduced independently: stashed only the fix, 4 failures; restored
+  it, 28/28 pass
+- No existing test assertion changed
+
+### Brownfield note
+The fix stops new host-less links from being created. Links already
+created on the baseline code are unaffected and still redirect. Acceptable
+for a prototype with no production data; a production fix would include a
+data check or cleanup migration.
 
