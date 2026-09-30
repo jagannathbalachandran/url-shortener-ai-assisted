@@ -451,4 +451,6 @@ Corrected:
 - git diff --stat: only the planned files
 - ci.yml diff: only the two action versions changed
 - CI green, no Node deprecation annotation
+- Clean-clone test: fresh clone into a temp folder, followed README only;
+  setup, migrations, server start and check.py all worked first time.
 
