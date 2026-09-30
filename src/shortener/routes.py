@@ -11,9 +11,10 @@ from shortener.dependencies import (
     enforce_create_rate_limit,
     get_current_settings,
     get_link_service,
+    get_stats_service,
 )
-from shortener.schemas import CreateLinkRequest, LinkResponse
-from shortener.service import LinkService
+from shortener.schemas import CreateLinkRequest, LinkResponse, LinkStatsResponse
+from shortener.service import LinkService, StatsService
 
 router = APIRouter(prefix="/api/v1/links", tags=["links"])
 
@@ -43,3 +44,13 @@ def get_link_details(
     """Return details for the link stored under `code`."""
     link = service.resolve(code)
     return LinkResponse.from_link(link, settings.base_url)
+
+
+@router.get("/{code}/stats", response_model=LinkStatsResponse)
+def get_link_stats(
+    code: Annotated[str, Path()],
+    stats_service: Annotated[StatsService, Depends(get_stats_service)],
+) -> LinkStatsResponse:
+    """Return click statistics for the link stored under `code`."""
+    stats = stats_service.get_stats(code)
+    return LinkStatsResponse.from_stats(code, stats)

@@ -7,14 +7,15 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from shortener.codegen import CodeGenerator, SecureCodeGenerator
 from shortener.config import Settings
 from shortener.exceptions import DatabaseUnavailableError, RateLimitExceededError
 from shortener.rate_limit import RateLimiter
-from shortener.repository import LinkRepository, ping_database
-from shortener.service import LinkService
+from shortener.referrer import extract_referrer_host
+from shortener.repository import ClickRepository, LinkRepository, ping_database
+from shortener.service import LinkService, StatsService
 
 UNKNOWN_CLIENT_KEY = "unknown"
 
@@ -70,3 +71,26 @@ def get_database_health(session: Annotated[Session, Depends(get_session)]) -> No
         ping_database(session)
     except SQLAlchemyError as exc:
         raise DatabaseUnavailableError() from exc
+
+
+def get_session_factory(request: Request) -> sessionmaker[Session]:
+    """Return the app-wide session factory.
+
+    Used by background tasks that need their own session, independent of
+    the per-request session (which is closed before background tasks run).
+    """
+    factory: sessionmaker[Session] = request.app.state.session_factory
+    return factory
+
+
+def get_referrer_host(request: Request) -> str:
+    """Return the lowercase referrer host for this request, or "(direct)"."""
+    return extract_referrer_host(request.headers.get("referer"))
+
+
+def get_stats_service(
+    link_service: Annotated[LinkService, Depends(get_link_service)],
+    session: Annotated[Session, Depends(get_session)],
+) -> StatsService:
+    """Build a StatsService wired to a per-request click repository."""
+    return StatsService(link_service, ClickRepository(session))

@@ -72,12 +72,33 @@ database unless `DATABASE_URL` is set.
 |--------|-----------------------------|---------------------------------------------|
 | POST   | `/api/v1/links`             | Create a short link (rate limited)         |
 | GET    | `/api/v1/links/{code}`      | Look up a link's details by its code       |
+| GET    | `/api/v1/links/{code}/stats`| Per-link click analytics                   |
 | GET    | `/{code}`                   | Redirect (302) to the original URL         |
 | GET    | `/health`                   | Liveness probe; no DB access               |
 | GET    | `/ready`                    | Readiness probe; 503 if the DB is unreachable |
 | GET    | `/docs`, `/openapi.json`    | Interactive API docs / OpenAPI schema      |
 
 Errors use one shape: `{"error": {"code": "...", "message": "...", "details"?: [...]}}`.
+
+### Click analytics
+
+Each redirect is recorded as a click in a background task, after the
+response is sent (ADR-001 D4) -- so redirect latency is unaffected, but a
+click can be lost if the process crashes between the response and the
+write. Only the referrer's lowercase host is stored (never the full URL,
+query string, path, or IP address/user agent); a missing, unparseable, or
+implausibly long referrer host is recorded as `"(direct)"`.
+
+`GET /api/v1/links/{code}/stats` returns:
+
+- `total_clicks` — all-time total clicks for the link.
+- `clicks_per_day` — clicks per UTC calendar day for the last 30 days
+  (today and the preceding 29 days), ascending by date; days with zero
+  clicks are omitted.
+- `top_referrers` — all-time top 5 referrer hosts by click count.
+
+(These windows are also documented on each field in the OpenAPI schema,
+visible at `/docs`.)
 
 ## Known limitations
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.engine import Dialect
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -13,6 +13,7 @@ from shortener.db import Base
 
 CODE_LENGTH = 7
 MAX_ORIGINAL_URL_LENGTH = 2048
+MAX_REFERRER_HOST_LENGTH = 253  # DNS practical maximum hostname length
 
 
 class UTCDateTime(TypeDecorator[datetime]):
@@ -56,3 +57,18 @@ class Link(Base):
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime, default=lambda: datetime.now(UTC)
     )
+
+
+class Click(Base):
+    """A single recorded redirect click against a link (FR-5)."""
+
+    __tablename__ = "clicks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    link_id: Mapped[int] = mapped_column(
+        ForeignKey("links.id", ondelete="CASCADE"), index=True
+    )
+    clicked_at: Mapped[datetime] = mapped_column(
+        UTCDateTime, default=lambda: datetime.now(UTC)
+    )
+    referrer_host: Mapped[str] = mapped_column(String(MAX_REFERRER_HOST_LENGTH))

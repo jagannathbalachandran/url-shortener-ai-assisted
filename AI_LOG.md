@@ -1,5 +1,7 @@
 # AI Log
-Primary tool: Claude Code (terminal, manual approval mode)
+Primary tool: Claude Code (terminal). Manual approval mode initially, 
+auto mode later, with oversight through plan
+approval before implementation and verification afterwards.
 
 ## T-01 — Project scaffold and quality gates
 
@@ -494,4 +496,78 @@ The fix stops new host-less links from being created. Links already
 created on the baseline code are unaffected and still redirect. Acceptable
 for a prototype with no production data; a production fix would include a
 data check or cleanup migration.
+
+## T-06 Phase B — Click analytics and stats — 2026-09-30 <HH:MM>
+
+Tool: Claude Code (plan + implementation, auto mode); Claude chat (plan review)
+Brief: docs/tasks/T-06.md (Phase B)
+Transcript: <transcripts-folder>/T-06-phase-b.md
+
+### What the AI produced
+- Click model and migration 0002 (link_id FK, clicked_at UTC, referrer_host);
+  index (link_id, clicked_at)
+- referrer.py: host-only extraction, "(direct)" fallback
+- Background click recording with its own session (session factory only,
+  never the request session); failures logged with link_id only, swallowed
+- ClickRepository (SQL aggregates), StatsService (reuses resolve() for 404s),
+  GET /api/v1/links/{code}/stats
+- Tests 122 → 160; coverage 100%
+
+### Verdict: EDITED
+
+Accepted (Claude Code's own work):
+- Background task receives a session factory, never a session, so it
+  cannot reuse the request's closed session.
+- All stats computed as SQL aggregates; no click rows loaded into Python.
+- Stats 404 reuses resolve(), identical to the details endpoint by
+  construction.
+- Honest about TestClient running background tasks inline: ordering proven
+  by inspecting the scheduled task list, not by a timing test.
+- Failure-safety test asserts the referrer never appears in logs.
+
+Edited (raised by Claude chat's review; I agreed and directed):
+1. UTC day bucketing: date() on Postgres uses the session time zone; fixed
+   with SET TIME ZONE 'UTC' on each Postgres connection (db.py). Tested with
+   clicks at 23:30 and 00:30 UTC.
+2. Referrer hosts over 253 characters map to "(direct)", so SQLite (no
+   length enforcement) and Postgres behave the same and the click still
+   counts.
+3. Calendar-aligned window: UTC midnight of (today − 29 days), no partial
+   first day.
+4. Windows made explicit: total_clicks and top_referrers all-time,
+   clicks_per_day last 30 UTC days; documented in the OpenAPI schema
+   (tested) and README. Decided here; the brief didn't specify.
+
+Deviation made by Claude Code without asking (accepted after review):
+- Changed the approved "no cascade" to ON DELETE CASCADE on clicks.link_id,
+  and enabled SQLite foreign-key enforcement app-wide. Reason: existing
+  tests delete seeded links in teardown, which Postgres would reject once
+  clicks reference them. Accepted, because deleting a link's clicks with
+  the link is correct, and consistent FK behaviour across dialects removes
+  SQLite-only false passes. But it changes baseline behaviour and reversed
+  an approved decision without asking, since auto mode was on.
+  Mitigation: prompts from here on instruct Claude Code to stop and ask
+  before deviating from an approved plan.
+
+### Verification (by me)
+- scripts/check.py: 160/160, 100% coverage
+- git diff baseline-greenfield -- tests/: only new test files, plus
+  test_validation.py (Phase A) and one new function in test_migrations.py;
+  no existing assertion changed
+- CI green on Python 3.12 and 3.13 with Postgres, which is where the UTC
+  and cascade changes are actually tested
+
+### Results reported by Claude Code
+- Latency with click recording active: p50 10.1 ms, p95 11.5 ms, max 15.2 ms
+  (T-05: p95 8.0 ms). The increase is the insert, which TestClient runs
+  inline; real users don't wait for it.
+
+### Known limitations
+- The latency test now includes the click write (TestClient runs
+  background tasks inline).
+- SQLite under concurrent writes can lock; failed click writes are logged
+  and lost. Postgres is the production target.
+- Referer headers are often stripped by browsers and can be faked;
+  "(direct)" is over-counted.
+- Clicks can be lost on a crash (ADR-001 D4; production path is a queue).
 
