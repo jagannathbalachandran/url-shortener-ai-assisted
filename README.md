@@ -64,3 +64,35 @@ docker compose up -d
 CI runs the full test suite against a Postgres service container (see
 `.github/workflows/ci.yml`); locally, tests default to a temporary SQLite
 database unless `DATABASE_URL` is set.
+
+## Endpoints
+
+| Method | Path                        | Purpose                                    |
+|--------|-----------------------------|---------------------------------------------|
+| POST   | `/api/v1/links`             | Create a short link (rate limited)         |
+| GET    | `/api/v1/links/{code}`      | Look up a link's details by its code       |
+| GET    | `/{code}`                   | Redirect (302) to the original URL         |
+| GET    | `/health`                   | Liveness probe; no DB access               |
+| GET    | `/ready`                    | Readiness probe; 503 if the DB is unreachable |
+| GET    | `/docs`, `/openapi.json`    | Interactive API docs / OpenAPI schema      |
+
+Errors use one shape: `{"error": {"code": "...", "message": "...", "details"?: [...]}}`.
+
+## Known limitations
+
+- Rate limiting on `POST /api/v1/links` is per client IP, in-memory, and
+  per application instance (not shared across multiple instances behind a
+  load balancer). It also uses a fixed window, so bursts are possible at
+  window edges (e.g. a client can send up to 2x the limit across a window
+  boundary). It keys on `request.client.host`, not `X-Forwarded-For`,
+  since that header is spoofable without a trusted proxy in front of the
+  service.
+- The redirect latency test (p95 < 50 ms) runs in-process, so it measures
+  app code, not real network latency.
+- Non-ASCII (IDN) hosts in submitted URLs are percent-encoded in the
+  redirect's `Location` header rather than converted to punycode.
+- Runtime dependencies are pinned with version ranges, not exact pins; a
+  lock file is a follow-up.
+- `httpx`/`starlette.testclient` emits a deprecation warning
+  (`StarletteDeprecationWarning`) recommending `httpx2`; no library change
+  has been made yet.

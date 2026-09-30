@@ -26,8 +26,8 @@ router = APIRouter(prefix="/api/v1/links", tags=["links"])
 )
 def create_link(
     body: CreateLinkRequest,
-    service: LinkService = Depends(get_link_service),
-    settings: Settings = Depends(get_current_settings),
+    service: Annotated[LinkService, Depends(get_link_service)],
+    settings: Annotated[Settings, Depends(get_current_settings)],
 ) -> LinkResponse:
     """Create a short link for `body.url` and return its short URL."""
     link = service.create_link(body.url)

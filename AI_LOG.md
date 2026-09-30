@@ -410,3 +410,45 @@ individually against the code, rather than accepting a summary report.
 - 6 remaining pytest warnings, tracked for the pre-baseline chore commit.
 - Manual verification (curl checks) to be done and recorded separately.
 
+## T-05b — Pre-baseline cleanup — 2026-09-30 <HH:MM>
+
+Tool: Claude Code (plan + implementation); Claude chat (plan review)
+Brief: docs/tasks/T-05b.md
+Transcript: <transcripts-folder>/T-05b-pre-baseline.md
+
+### What the AI produced
+- tests/test_models.py, tests/test_main.py (new): models.py and main.py at 100%
+- tests/test_db.py: engine disposal added (teardown only)
+- alembic.ini: path_separator = os
+- routes.py, dependencies.py: all 6 Depends() defaults converted to Annotated
+- pyproject.toml: flake8-bugbear Depends exemption removed
+- README.md: fresh-clone setup, endpoint overview, known limitations
+- ci.yml: actions/checkout@v7, actions/setup-python@v7
+- Tests 109 → 115; warnings 6 → 1 (httpx/TestClient, recorded only)
+
+### Verdict: ACCEPTED, with one scope extension and one correction
+Accepted (Claude Code's own work):
+- Root-caused the ResourceWarning with tracemalloc: test_db.py never
+  disposed its engine, so a pooled SQLite connection was reclaimed later by
+  garbage collection and blamed on unrelated tests. Fixed at the source
+  rather than silenced.
+- Found that main.py had no __main__ block, so the brief's pragma option
+  didn't apply; covered it with an import test instead.
+- Scope extended (accepted): the brief named only the T-03 routes, but 6
+  Depends defaults existed across routes.py and dependencies.py. AC3 (ruff
+  passes with the exemption removed) required converting all 6.
+- Held the CI version change until the versions were confirmed, as the
+  brief required.
+
+Corrected:
+- CI action versions checked against the GitHub release pages before
+  applying: checkout v7, setup-python v7 (v7.0.0 is latest). Claude Code's
+  claim that Node 24 arrived in v6 was wrong for checkout (it was v5); the
+  target versions were unaffected.
+
+### Verification (by me)
+- scripts/check.py: 115/115, 1 warning
+- git diff --stat: only the planned files
+- ci.yml diff: only the two action versions changed
+- CI green, no Node deprecation annotation
+

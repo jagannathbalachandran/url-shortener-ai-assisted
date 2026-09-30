@@ -12,5 +12,6 @@ def test_create_session_factory_executes_queries(database_url: str) -> None:
 
     with factory() as session:
         result: int = session.execute(text("SELECT 1")).scalar_one()
+    factory.kw["bind"].dispose()
 
     assert result == 1

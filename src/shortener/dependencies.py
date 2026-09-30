@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import Annotated
 
 from fastapi import Depends, Request
 from sqlalchemy.exc import SQLAlchemyError
@@ -39,8 +40,8 @@ def get_code_generator() -> CodeGenerator:
 
 
 def get_link_service(
-    session: Session = Depends(get_session),
-    code_generator: CodeGenerator = Depends(get_code_generator),
+    session: Annotated[Session, Depends(get_session)],
+    code_generator: Annotated[CodeGenerator, Depends(get_code_generator)],
 ) -> LinkService:
     """Build a LinkService wired to a per-request repository and code generator."""
     repository = LinkRepository(session)
@@ -54,7 +55,7 @@ def get_rate_limiter(request: Request) -> RateLimiter:
 
 
 def enforce_create_rate_limit(
-    request: Request, limiter: RateLimiter = Depends(get_rate_limiter)
+    request: Request, limiter: Annotated[RateLimiter, Depends(get_rate_limiter)]
 ) -> None:
     """Raise RateLimitExceededError if the requesting client is over its limit."""
     key = request.client.host if request.client else UNKNOWN_CLIENT_KEY
@@ -63,7 +64,7 @@ def enforce_create_rate_limit(
         raise RateLimitExceededError(result.retry_after_seconds)
 
 
-def get_database_health(session: Session = Depends(get_session)) -> None:
+def get_database_health(session: Annotated[Session, Depends(get_session)]) -> None:
     """Raise DatabaseUnavailableError if a trivial query against the DB fails."""
     try:
         ping_database(session)
