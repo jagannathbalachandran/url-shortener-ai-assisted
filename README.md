@@ -224,6 +224,7 @@ docs/               requirements, plan, ADRs, task briefs, architecture, enginee
 - ADRs: [001 — Core design decisions](docs/adr/001-core-design-decisions.md), [002 — Link expiry](docs/adr/002-link-expiry.md)
 - Task briefs: [T-01](docs/tasks/T-01.md) · [T-02](docs/tasks/T-02.md) · [T-03](docs/tasks/T-03.md) · [T-04](docs/tasks/T-04.md) · [T-05](docs/tasks/T-05.md) · [T-05b](docs/tasks/T-05b.md) · [T-06](docs/tasks/T-06.md) · [T-07](docs/tasks/T-07.md) · [T-08](docs/tasks/T-08.md)
 - [Architecture overview](docs/architecture.md)
+- [Module reference](docs/module-reference.md) — every module/class, and a full request walkthrough
 - [Engineering summary](docs/engineering-summary.md)
 - [AI log](AI_LOG.md) and [transcripts](docs/transcripts/)
 
